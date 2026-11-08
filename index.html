@@ -2847,30 +2847,39 @@ document.addEventListener('mouseup',ev=>{if(!ev.target.closest||!ev.target.close
 document.addEventListener('mousedown',ev=>{if(ev.target.id!=='cl-pop'){const o=$('#cl-pop');o&&!ev.target.closest('#caseDoc')&&o.remove()}});
 // hover any heading or paragraph in the case: a + button in the margin starts a comment on it
 let plus=null,pTarget=null;
+// the smallest readable block under the pointer: a paragraph, list row, heading, table row or a short text box
+const wordy=e=>((e.textContent||'').match(/[A-Za-z]/g)||[]).length>=12;
+function blockOf(t){if(!t||!t.closest||!t.closest('#caseDoc')||t.closest('.cl-tag,.cl-by'))return null;if(t.nodeType===1&&!wordy(t)&&t.closest('.faint,small'))return null;let e=t.nodeType===1?t:t.parentElement;
+ while(e&&e.id!=='caseDoc'&&!e.classList.contains('csec')){const tx=(e.textContent||'').trim(),cs=getComputedStyle(e);
+  if(tx.length>=6&&tx.length<=900&&!/^inline/.test(cs.display)&&e.offsetHeight<260)return e;e=e.parentElement}return null}
+const editable=e=>!e.querySelector('div,table,ul,ol,svg,section');
+let penT=null;document.addEventListener('click',ev=>{if(ev.target.closest&&ev.target.closest('.cl-editing')){ev.stopPropagation();ev.preventDefault()}},true);function penBlock(t){if(!t||!t.closest||!t.closest('#caseDoc')||t.closest('.cl-tag,.cl-by'))return null;if(t.closest('.faint,small')&&!wordy(t))return null;let e=t.nodeType===1?t:t.parentElement;while(e&&e.id!=='caseDoc'&&!e.classList.contains('csec')){const tx=(e.textContent||'').trim();if(tx.length>=6&&tx.length<=900&&getComputedStyle(e).display!=='inline'&&editable(e))return e;if(!editable(e))return null;e=e.parentElement}return null}
 function plusBtn(){if(plus&&document.body.contains(plus))return plus;plus=document.createElement('button');plus.className='cl-plus';plus.setAttribute('aria-label','Comment on this paragraph');plus.innerHTML=ic('plus',15);
  plus.onmousedown=e=>e.preventDefault();
  plus.onclick=()=>{if(!pTarget)return;const sec=pTarget.closest('.csec'),t=byId(S.openId);if(!sec||!t)return;const c=collab(t);c.sel={s:sec.id.slice(3),q:pTarget.textContent.trim().replace(/\s+/g,' ')};c.tab='comments';c.fp='all';rerail();plus.style.display='none';const ta=$('#cl-txt');ta&&ta.focus()};
  document.body.appendChild(plus);return plus}
-document.addEventListener('mouseover',ev=>{if(ev.target.closest&&ev.target.closest('.cl-plus'))return;const doc=ev.target.closest&&ev.target.closest('#caseDoc');if(!doc){if(plus)plus.style.display='none';return}
- const blk=ev.target.closest('#caseDoc h2,#caseDoc h3,#caseDoc h4,#caseDoc p,#caseDoc li,#caseDoc tr,#caseDoc .card');if(!blk||blk.closest('.cl-tag'))return;pTarget=blk;
+let hideT=0;const hideBtns=()=>{clearTimeout(hideT);hideT=setTimeout(()=>{if(plus)plus.style.display='none';if(pen)pen.style.display='none'},700)};
+document.addEventListener('mouseover',ev=>{if(ev.target.closest&&ev.target.closest('.cl-plus')){clearTimeout(hideT);return}const doc=ev.target.closest&&ev.target.closest('#caseDoc');if(!doc){hideBtns();return}clearTimeout(hideT);
+ const drr=doc.getBoundingClientRect();if(plus&&plus.style.display==='grid'&&ev.clientX>drr.right-160)return;const blk=blockOf(ev.target);if(!blk)return;pTarget=blk;
  const b=plusBtn(),r=blk.getBoundingClientRect(),dr=doc.getBoundingClientRect();b.style.display='grid';b.style.top=(r.top+Math.min(r.height/2,14)-14)+'px';b.style.left=(dr.right+6)+'px';
  document.querySelectorAll('#caseDoc .cl-hover').forEach(x=>x.classList.remove('cl-hover'));blk.classList.add('cl-hover')});
 document.addEventListener('scroll',()=>{if(plus)plus.style.display='none'},true);
 // edit a paragraph in place: changes show as tracked insertions and deletions in the editor's colour, and land in Edit history
 let pen=null;
 function penBtn(){if(pen&&document.body.contains(pen))return pen;pen=document.createElement('button');pen.className='cl-plus cl-pen';pen.setAttribute('aria-label','Edit this paragraph');pen.innerHTML=ic('edit',14);
- pen.onmousedown=e=>e.preventDefault();pen.onclick=()=>{if(pTarget)startEdit(pTarget)};document.body.appendChild(pen);return pen}
-document.addEventListener('mouseover',ev=>{if(ev.target.closest&&ev.target.closest('.cl-plus'))return;const ok=ev.target.closest&&ev.target.closest('#caseDoc p,#caseDoc li');const b=penBtn();
- if(!ok||ok.isContentEditable){if(!(ev.target.closest&&ev.target.closest('#caseDoc')))b.style.display='none';else if(!ok)b.style.display='none';return}
- const r=ok.getBoundingClientRect(),dr=$('#caseDoc').getBoundingClientRect();b.style.display='grid';b.style.top=(r.top+Math.min(r.height/2,14)-14)+'px';b.style.left=(dr.right+38)+'px'});
+ pen.onmousedown=e=>e.preventDefault();pen.onclick=()=>{const t=penT||pTarget;if(t)startEdit(t)};document.body.appendChild(pen);return pen}
+document.addEventListener('mouseover',ev=>{if(ev.target.closest&&ev.target.closest('.cl-plus'))return;if(ev.target.closest&&ev.target.closest('.cl-plus'))return;{const cd=document.getElementById('caseDoc');if(cd&&pen&&pen.style.display==='grid'&&ev.clientX>cd.getBoundingClientRect().right-160)return}let ok=penBlock(ev.target);if(!ok&&ev.target.closest&&ev.target.closest('#caseDoc')){const y=ev.clientY;ok=[...ev.target.querySelectorAll('*')].find(c=>{const r=c.getBoundingClientRect();return y>=r.top&&y<=r.bottom&&(c.textContent||'').trim().length>=6&&getComputedStyle(c).display!=='inline'&&editable(c)})||null;if(!ok){const tn=[...ev.target.childNodes].filter(n=>n.nodeType===3&&n.nodeValue.trim().length>=6).sort((x,z)=>z.nodeValue.length-x.nodeValue.length)[0];if(tn){const sp=document.createElement('span');sp.className='cl-line';tn.parentNode.insertBefore(sp,tn);sp.appendChild(tn);ok=sp}}}else if(ev.target.classList&&ev.target.classList.contains('cl-line'))ok=ev.target;const b=penBtn();penT=ok;
+ if(!ok||ok.isContentEditable){if(ok&&ok.isContentEditable)b.style.display='none';return}
+ const r=ok.getBoundingClientRect(),dr=$('#caseDoc').getBoundingClientRect();b.style.display='grid';b.style.top=(r.top+Math.min(r.height/2,14)-14)+'px';b.style.left=(dr.right+6)+'px';b.style.top=((plus&&plus.style.display!=='none'?parseFloat(plus.style.top):parseFloat(b.style.top))+34)+'px'});
 document.addEventListener('scroll',()=>{if(pen)pen.style.display='none'},true);
+document.addEventListener('mouseout',ev=>{if(ev.target.closest&&ev.target.closest('.cl-plus')&&!(ev.relatedTarget&&ev.relatedTarget.closest&&ev.relatedTarget.closest('.cl-plus,#caseDoc')))hideBtns()});
 const words=s=>s.split(/(\s+)/).filter(x=>x!=='');
 function diff(a,b){const A=words(a),B=words(b),n=A.length,m=B.length,L=Array.from({length:n+1},()=>new Int16Array(m+1));
  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)L[i][j]=A[i]===B[j]?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
  const out=[];let i=0,j=0;const push=(t,v)=>{const l=out[out.length-1];if(l&&l[0]===t)l[1]+=v;else out.push([t,v])};
  while(i<n&&j<m){if(A[i]===B[j]){push('=',A[i]);i++;j++}else if(L[i+1][j]>=L[i][j+1]){push('-',A[i]);i++}else{push('+',B[j]);j++}}
  while(i<n)push('-',A[i++]);while(j<m)push('+',B[j++]);return out}
-function startEdit(el){const t=byId(S.openId);if(!t)return;const sec=el.closest('.csec');if(!sec)return;
+function startEdit(el){const t=byId(S.openId);if(!t)return;if(el.dataset.orig==null&&el.querySelector('div,button,span.cite,table,ul,ol')){const tn=[...el.childNodes].filter(n=>n.nodeType===3&&n.nodeValue.trim().length>=6).sort((x,z)=>z.nodeValue.length-x.nodeValue.length)[0];if(tn){const sp=document.createElement('span');sp.className='cl-line';tn.parentNode.insertBefore(sp,tn);sp.appendChild(tn);el=sp}else{const inner=[...el.querySelectorAll('p,span,b')].find(c=>(c.textContent||'').trim().length>=12&&!c.querySelector('div,button'));if(inner)el=inner;else return}}const sec=el.closest('.csec');if(!sec)return;
  const before=(el.dataset.orig!=null?el.dataset.cur:el.textContent).trim();if(el.dataset.orig==null)el.dataset.orig=before;
  el.textContent=before;el.contentEditable='true';el.classList.add('cl-editing');el.focus();
  const rg=document.createRange();rg.selectNodeContents(el);rg.collapse(false);const sl=getSelection();sl.removeAllRanges();sl.addRange(rg);
