@@ -839,6 +839,14 @@ body::before{content:'';position:fixed;inset:-10%;z-index:0;pointer-events:none;
 .csec.cl-flash{background:var(--accent-soft)}
 .cl-plus{position:fixed;z-index:60;display:none;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;box-shadow:0 6px 16px -6px var(--accent);transition:transform .12s}
 .cl-plus:hover{transform:scale(1.12)}
+.cl-pen{display:none!important}
+.cl-hint{font-size:12px;color:var(--fg3)}
+#caseDoc .cl-editing{outline:none!important;background:color-mix(in srgb,var(--accent) 6%,transparent)!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 45%,transparent);border-radius:6px;cursor:text}
+#caseDoc .csec p,#caseDoc .csec li,#caseDoc .csec .grow{cursor:text}
+.cl-ins{text-decoration:none!important;border-bottom:0!important;background:color-mix(in srgb,var(--ec) 16%,transparent)!important;color:inherit!important;border-radius:3px;padding:0 1px;box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--ec) 55%,transparent)}
+.cl-changed{position:relative}
+.cl-rail.cl-flashr{box-shadow:0 0 0 3px var(--accent-soft),var(--shadow)}
+
 .cl-pen{background:var(--surface)!important;color:var(--fg)!important;border:1px solid var(--line2);box-shadow:var(--shadow)!important}
 #caseDoc .cl-editing{outline:2px solid var(--accent);outline-offset:4px;border-radius:6px;background:var(--surface)}
 .cl-ins{text-decoration:none;color:var(--ec);background:color-mix(in srgb,var(--ec) 16%,transparent);border-bottom:2px solid var(--ec);border-radius:3px;padding:0 1px}
@@ -2882,7 +2890,7 @@ function diff(a,b){const A=words(a),B=words(b),n=A.length,m=B.length,L=Array.fro
 function startEdit(el){const t=byId(S.openId);if(!t)return;if(el.dataset.orig==null&&el.querySelector('div,button,span.cite,table,ul,ol')){const tn=[...el.childNodes].filter(n=>n.nodeType===3&&n.nodeValue.trim().length>=6).sort((x,z)=>z.nodeValue.length-x.nodeValue.length)[0];if(tn){const sp=document.createElement('span');sp.className='cl-line';tn.parentNode.insertBefore(sp,tn);sp.appendChild(tn);el=sp}else{const inner=[...el.querySelectorAll('p,span,b')].find(c=>(c.textContent||'').trim().length>=12&&!c.querySelector('div,button'));if(inner)el=inner;else return}}const sec=el.closest('.csec');if(!sec)return;
  const before=(el.dataset.orig!=null?el.dataset.cur:el.textContent).trim();if(el.dataset.orig==null)el.dataset.orig=before;
  el.textContent=before;el.contentEditable='true';el.classList.add('cl-editing');el.focus();
- const rg=document.createRange();rg.selectNodeContents(el);rg.collapse(false);const sl=getSelection();sl.removeAllRanges();sl.addRange(rg);
+ const sl=getSelection();let rg=null;if(window.__clPt&&document.caretRangeFromPoint){rg=document.caretRangeFromPoint(window.__clPt[0],window.__clPt[1]);if(rg&&!el.contains(rg.startContainer))rg=null}window.__clPt=null;if(!rg){rg=document.createRange();rg.selectNodeContents(el);rg.collapse(false)}sl.removeAllRanges();sl.addRange(rg);
  if(pen)pen.style.display='none';if(plus)plus.style.display='none';
  const done=keep=>{el.removeEventListener('blur',onBlur);el.removeEventListener('keydown',onKey);el.contentEditable='false';el.classList.remove('cl-editing');
   const after=keep?el.textContent.trim().replace(/\s+/g,' '):before;
@@ -2890,12 +2898,21 @@ function startEdit(el){const t=byId(S.openId);if(!t)return;if(el.dataset.orig==n
   const who=me(),c=collab(t),d=diff(before,after),del=d.filter(x=>x[0]==='-').map(x=>x[1].trim()).join(' … '),ins=d.filter(x=>x[0]==='+').map(x=>x[1].trim()).join(' … ');
   el.dataset.cur=after;el.dataset.by=who;el.dataset.when='Just now';
   const s=sec.id.slice(3);c.own[s]=who;c.hist.unshift({by:who,s,w:'Just now',a:'Edited '+(SECN[s]||'text').toLowerCase(),del:del.slice(0,160),ins:ins.slice(0,160)});c.ver++;
-  render(el);const tag=sec.querySelector(':scope > .cl-tag');tag&&tag.remove();decorate(t);rerail();toast('Edit saved as version '+c.ver+'. Changes are marked in your colour','ok')};
+  render(el);const tag=sec.querySelector(':scope > .cl-tag');tag&&tag.remove();decorate(t);rerail();toast('Saved. Version '+c.ver+' is in History','ok')};
  const onBlur=()=>done(true),onKey=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();el.blur()}if(e.key==='Escape'){e.preventDefault();e.stopPropagation();done(false)}};
  el.addEventListener('blur',onBlur);el.addEventListener('keydown',onKey)}
 function render(el){if(el.dataset.orig==null||el.dataset.cur==null){if(el.dataset.orig!=null&&el.dataset.cur==null)el.textContent=el.dataset.orig;return}
  const by=el.dataset.by,d=diff(el.dataset.orig,el.dataset.cur);el.style.setProperty('--ec',col(by));
- el.innerHTML=d.map(([k,v])=>k==='='?esc(v):k==='-'?`<del class="cl-del">${esc(v)}</del>`:`<ins class="cl-ins">${esc(v)}</ins>`).join('')+` <span class="cl-by" data-tip="${esc(nm(by))} · ${el.dataset.when}">${av(by,18)} ${esc(first(by))} · ${el.dataset.when}</span>`}
+ el.innerHTML=d.filter(x=>x[0]!=='-').map(([k,v])=>k==='='?esc(v):`<ins class="cl-ins" data-tip="Changed by ${esc(nm(by))} · ${el.dataset.when}">${esc(v)}</ins>`).join('');el.classList.add('cl-changed');el.dataset.tip=`Edited by ${nm(by)} · ${el.dataset.when}. Open History to see what changed.`}
+// double-click any text in the research case to edit it in place, like a document
+document.addEventListener('dblclick',ev=>{const doc=ev.target.closest&&ev.target.closest('#caseDoc');if(!doc||ev.target.closest('.cl-editing,.cl-tag,input,select,textarea'))return;
+ let el=penBlock(ev.target)||blockOf(ev.target);if(!el)return;ev.preventDefault();window.__clPt=[ev.clientX,ev.clientY];startEdit(el)});
+// History button at the top right of the case
+function histBtn(){const bar=document.querySelector('#dbody .cl-main > .stack > div:first-child');if(!bar||bar.querySelector('.cl-hb'))return;
+ bar.insertAdjacentHTML('beforeend',`<span class="grow"></span><span class="cl-hint">Double-click any text to edit</span><button class="btn cl-hb" data-cl="hist">${ic('clock',15)} History</button>`)}
+new MutationObserver(()=>{if(document.querySelector('#caseDoc'))histBtn()}).observe(document.body,{childList:true,subtree:true});
+document.addEventListener('click',ev=>{const b=ev.target.closest&&ev.target.closest('[data-cl="hist"]');if(!b)return;ev.stopPropagation();const t=byId(S.openId);if(!t)return;const c=collab(t);c.tab='history';c.fp='all';rerail();const r=document.querySelector('#dbody .cl-rail');if(r){r.scrollIntoView({behavior:'smooth',block:'nearest'});r.classList.add('cl-flashr');setTimeout(()=>r.classList.remove('cl-flashr'),1200)}},true);
+
 })();
 
 </script>
